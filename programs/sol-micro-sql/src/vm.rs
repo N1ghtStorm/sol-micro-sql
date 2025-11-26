@@ -3,12 +3,10 @@ use crate::graph::{NodeId, GraphStore as Graph};
 #[derive(Debug, Clone)]
 pub enum Opcode {
     TraverseOut{
-        node_label: String,
-        edge_label: String,
-    },
-    TraverseIn{
-        node_label: String,
-        edge_label: String,
+        where_node_label: String,
+        where_edge_label: String,
+        where_not_node_label: String,
+        where_not_edge_label: String,
     },
     FilterNodeLabel{
         node_label: String,
@@ -66,16 +64,16 @@ impl<'g> Vm<'g> {
     pub fn execute(&mut self, ops: &[Opcode]) -> Result<VmResult, VmError> {
         for op in ops {
             match op {
-                Opcode::TraverseOut { node_label, edge_label } => {
-                    let start_nodes = self.get_current_nodes()?;
-                    let result = self.graph.traverse_out(
-                        start_nodes,
-                        node_label,
-                        edge_label,
-                        self.limit,
-                    );
-                    self.current_set = result;
-                }
+                // Opcode::TraverseOut { where_node_label: node_label, where_edge_label: edge_label } => {
+                //     let start_nodes = self.get_current_nodes()?;
+                //     let result = self.graph.traverse_out(
+                //         start_nodes,
+                //         node_label,
+                //         edge_label,
+                //         self.limit,
+                //     );
+                //     self.current_set = result;
+                // }
                 Opcode::FilterNodeLabel { node_label } => {
                     self.current_set.retain(|&node_id| {
                         self.graph

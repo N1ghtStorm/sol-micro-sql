@@ -286,4 +286,214 @@ mod tests {
         assert!(result.contains(&2));
         assert!(result.contains(&3));
     }
+
+    
+    // Large test graph schema:
+    //
+    //     City(1) ──Railway──> City(2) ──Railway──> City(3) ──Railway──> City(4)
+    //       │                      │                    │                    │
+    //       │                      │                    │                    │
+    //       │                      └──Highway──> Town(5) │                    │
+    //       │                                           │                    │
+    //       └──Highway──> Town(6)                      │                    │
+    //                                                      │                    │
+    //     City(7) ──Railway──> City(8) ──Highway──> Town(9) ──Highway──> Town(10)
+    //       │                      │
+    //       │                      │
+    //       └──Railway──> City(2) ──┘
+    //
+    //     Town(11) ──Highway──> Town(12) ──Highway──> Town(13)
+    //       │
+    //       └──Highway──> City(1)
+    //
+    fn create_large_test_graph() -> GraphStore {
+        let authority = Pubkey::new_unique();
+        
+        let mut nodes = Vec::new();
+        let mut edges = Vec::new();
+
+        nodes.push(Node {
+            id: 1,
+            label: "City".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![0, 1],
+        });
+
+        nodes.push(Node {
+            id: 2,
+            label: "City".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![2, 3],
+        });
+
+        nodes.push(Node {
+            id: 3,
+            label: "City".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![4],
+        });
+
+        nodes.push(Node {
+            id: 4,
+            label: "City".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![],
+        });
+
+        nodes.push(Node {
+            id: 5,
+            label: "Town".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![],
+        });
+
+        nodes.push(Node {
+            id: 6,
+            label: "Town".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![],
+        });
+
+        nodes.push(Node {
+            id: 7,
+            label: "City".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![5, 6],
+        });
+
+        nodes.push(Node {
+            id: 8,
+            label: "City".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![7],
+        });
+
+        nodes.push(Node {
+            id: 9,
+            label: "Town".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![8],
+        });
+
+        nodes.push(Node {
+            id: 10,
+            label: "Town".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![],
+        });
+
+        nodes.push(Node {
+            id: 11,
+            label: "Town".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![9, 10],
+        });
+
+        nodes.push(Node {
+            id: 12,
+            label: "Town".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![11],
+        });
+
+        nodes.push(Node {
+            id: 13,
+            label: "Town".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![],
+        });
+
+        edges.push(Edge {
+            from: 1,
+            to: 2,
+            label: "Railway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 1,
+            to: 6,
+            label: "Highway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 2,
+            to: 3,
+            label: "Railway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 2,
+            to: 5,
+            label: "Highway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 3,
+            to: 4,
+            label: "Railway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 7,
+            to: 2,
+            label: "Railway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 7,
+            to: 8,
+            label: "Railway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 8,
+            to: 9,
+            label: "Highway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 9,
+            to: 10,
+            label: "Highway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 11,
+            to: 1,
+            label: "Highway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 11,
+            to: 12,
+            label: "Highway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 12,
+            to: 13,
+            label: "Highway".to_string(),
+        });
+
+        GraphStore {
+            authority,
+            node_count: 13,
+            edge_count: 12,
+            nonce: 14,
+            nodes,
+            edges,
+        }
+    }
+
+    #[test]
+    fn test_traverse_out_large_graph_simple() {
+        let graph = create_large_test_graph();
+        
+        let result = graph.traverse_out(&[1], "City", "Railway", None);
+        
+        assert_eq!(result.len(), 4);
+        assert!(result.contains(&2));
+        assert!(result.contains(&3));
+        assert!(result.contains(&4));
+    }
 }

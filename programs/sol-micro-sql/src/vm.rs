@@ -76,11 +76,6 @@ impl<'g> Vm<'g> {
                     );
                     self.current_set = result;
                 }
-                Opcode::TraverseIn { node_label, edge_label } => {
-                    let start_nodes = self.get_current_nodes()?;
-                    let result = self.traverse_in(start_nodes, node_label, edge_label)?;
-                    self.current_set = result;
-                }
                 Opcode::FilterNodeLabel { node_label } => {
                     self.current_set.retain(|&node_id| {
                         self.graph
@@ -95,6 +90,7 @@ impl<'g> Vm<'g> {
                 Opcode::SaveResults => {
                     self.result_set.extend_from_slice(&self.current_set);
                 }
+                _ => continue,
             }
         }
 
@@ -105,63 +101,6 @@ impl<'g> Vm<'g> {
         } else {
             Err(VmError::NoReturnValue)
         }
-    }
-
-    fn traverse_in(
-        &self,
-        start_nodes: &[NodeId],
-        node_label: &str,
-        edge_label: &str,
-    ) -> Result<Vec<NodeId>, VmError> {
-        let mut result = Vec::new();
-        let mut visited = std::collections::HashSet::new();
-        let mut queue = std::collections::VecDeque::new();
-
-        for &node_id in start_nodes {
-            if let Some(node) = self.graph.get_node_by_id(node_id) {
-                if node.label == node_label {
-                    queue.push_back(node_id);
-                    visited.insert(node_id);
-                }
-            }
-        }
-
-        while let Some(current_id) = queue.pop_front() {
-            if let Some(limit) = self.limit {
-                if result.len() >= limit {
-                    break;
-                }
-            }
-
-            for edge in &self.graph.edges {
-                if edge.to == current_id && edge.label == edge_label {
-                    let source_id = edge.from;
-                    
-                    if !visited.contains(&source_id) {
-                        if let Some(source_node) = self.graph.get_node_by_id(source_id) {
-                            if source_node.label == node_label {
-                                visited.insert(source_id);
-                                result.push(source_id);
-                                
-                                if let Some(limit) = self.limit {
-                                    if result.len() >= limit {
-                                        return Ok(result);
-                                    }
-                                }
-                                
-                                queue.push_back(source_id);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(result)
-    }
-
-    pub fn set_current_set(&mut self, nodes: Vec<NodeId>) {
-        self.current_set = nodes;
     }
 }
 

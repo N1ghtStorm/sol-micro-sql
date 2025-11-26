@@ -89,3 +89,201 @@ impl GraphStore {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anchor_lang::prelude::Pubkey;
+
+    // Test graph schema:
+    //
+    //     City(1) ──Railway──> City(2) ──Railway──> City(3)
+    //       │                      │                    │
+    //       │                      │                    │
+    //       │                      └──Highway──> Town(4) │
+    //       │                                           │
+    //       └────────────Railway────────────────────────┘
+    //                    (cycle)
+    //
+    //     Town(5) (isolated node)
+    //
+    fn create_small_test_graph() -> GraphStore {
+        let authority = Pubkey::new_unique();
+        
+        let mut nodes = Vec::new();
+        let mut edges = Vec::new();
+
+        nodes.push(Node {
+            id: 1,
+            label: "City".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![0, 1],
+        });
+
+        nodes.push(Node {
+            id: 2,
+            label: "City".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![2, 3],
+        });
+
+        nodes.push(Node {
+            id: 3,
+            label: "City".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![4],
+        });
+
+        nodes.push(Node {
+            id: 4,
+            label: "Town".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![],
+        });
+
+        nodes.push(Node {
+            id: 5,
+            label: "Town".to_string(),
+            attributes: Vec::new(),
+            outgoing_edge_indices: vec![],
+        });
+
+        edges.push(Edge {
+            from: 1,
+            to: 2,
+            label: "Railway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 1,
+            to: 3,
+            label: "Railway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 2,
+            to: 3,
+            label: "Railway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 2,
+            to: 4,
+            label: "Highway".to_string(),
+        });
+
+        edges.push(Edge {
+            from: 3,
+            to: 1,
+            label: "Railway".to_string(),
+        });
+
+        GraphStore {
+            authority,
+            node_count: 5,
+            edge_count: 5,
+            nonce: 6,
+            nodes,
+            edges,
+        }
+    }
+
+    #[test]
+    fn test_traverse_out_simple() {
+        let graph = create_small_test_graph();
+        
+        let result = graph.traverse_out(&[1], "City", "Railway", None);
+        
+        assert_eq!(result.len(), 2);
+        assert!(result.contains(&2));
+        assert!(result.contains(&3));
+    }
+
+    #[test]
+    fn test_traverse_out_with_limit() {
+        let graph = create_small_test_graph();
+        
+        let result = graph.traverse_out(&[1], "City", "Railway", Some(1));
+        
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_traverse_out_wrong_edge_label() {
+        let graph = create_small_test_graph();
+        
+        let result = graph.traverse_out(&[1], "City", "NONEXISTENT", None);
+        
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_traverse_out_wrong_node_label() {
+        let graph = create_small_test_graph();
+        
+        let result = graph.traverse_out(&[1], "Town", "Railway", None);
+        
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_traverse_out_multiple_start_nodes() {
+        let graph = create_small_test_graph();
+        
+        let result = graph.traverse_out(&[1, 2], "City", "Railway", None);
+        
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&3));
+    }
+
+    #[test]
+    fn test_traverse_out_handles_cycles() {
+        let graph = create_small_test_graph();
+        
+        let result = graph.traverse_out(&[1], "City", "Railway", None);
+        
+        assert_eq!(result.len(), 2);
+        assert!(!result.contains(&1));
+        assert!(result.contains(&2));
+        assert!(result.contains(&3));
+    }
+
+    #[test]
+    fn test_traverse_out_different_edge_types() {
+        let graph = create_small_test_graph();
+        
+        let result = graph.traverse_out(&[2], "Town", "Highway", None);
+        
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&4));
+    }
+
+    #[test]
+    fn test_traverse_out_nonexistent_start_node() {
+        let graph = create_small_test_graph();
+        
+        let result = graph.traverse_out(&[999], "City", "Railway", None);
+        
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_traverse_out_empty_start_nodes() {
+        let graph = create_small_test_graph();
+        
+        let result = graph.traverse_out(&[], "City", "Railway", None);
+        
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_traverse_out_multi_hop() {
+        let graph = create_small_test_graph();
+        
+        let result = graph.traverse_out(&[1], "City", "Railway", None);
+        
+        assert_eq!(result.len(), 2);
+        assert!(result.contains(&2));
+        assert!(result.contains(&3));
+    }
+}

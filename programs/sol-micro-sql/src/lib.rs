@@ -1,4 +1,8 @@
+mod vm;
+mod graph;
+
 use anchor_lang::prelude::*;
+use crate::graph::GraphStore;
 
 declare_id!("9jJqjrdiJTYo9vYftpxJoLrLeuBn2qEQEX8Au1P8r1Gj");
 
@@ -142,31 +146,6 @@ pub mod sol_micro_sql {
     }
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct Node {
-    pub id: u128,
-    pub label: String,
-    pub attributes: Vec<(String, String)>,
-    pub outgoing_edge_indices: Vec<u32>,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct Edge {
-    pub from: u128,
-    pub to: u128,
-    pub label: String,
-}
-
-#[account]
-pub struct GraphStore {
-    pub authority: Pubkey,
-    pub node_count: u64,
-    pub edge_count: u64,
-    pub nonce: u128,
-    pub nodes: Vec<Node>,
-    pub edges: Vec<Edge>,
-}
-
 #[derive(Accounts)]
 pub struct InitializeGraph<'info> {
     #[account(
@@ -184,6 +163,7 @@ pub struct InitializeGraph<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[cfg(feature = "testnet")]
 #[derive(Accounts)]
 pub struct AddNode<'info> {
     #[account(
@@ -197,6 +177,7 @@ pub struct AddNode<'info> {
     pub authority: Signer<'info>,
 }
 
+#[cfg(feature = "testnet")]
 #[derive(Accounts)]
 pub struct SetNodeAttribute<'info> {
     #[account(
@@ -210,6 +191,7 @@ pub struct SetNodeAttribute<'info> {
     pub authority: Signer<'info>,
 }
 
+#[cfg(feature = "testnet")]
 #[derive(Accounts)]
 pub struct AddEdge<'info> {
     #[account(

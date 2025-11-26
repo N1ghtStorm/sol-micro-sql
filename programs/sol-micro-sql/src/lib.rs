@@ -10,7 +10,23 @@ pub mod sol_micro_sql {
         msg!("Greetings from: {:?}", ctx.program_id);
         Ok(())
     }
+
+    pub fn process_string(_ctx: Context<ProcessString>, input: String) -> Result<()> {
+        msg!("Received string: {}", input);
+        emit!(StringProcessed {
+            input: input.clone(),
+        });
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
 pub struct Initialize {}
+
+#[derive(Accounts)]
+pub struct ProcessString {}
+
+#[event]
+pub struct StringProcessed {
+    pub input: String,
+}

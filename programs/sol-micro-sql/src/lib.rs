@@ -24,7 +24,7 @@ pub mod sol_micro_sql {
 pub struct Initialize {}
 
 #[derive(Accounts)]
-pub struct ProcessString {}
+pub struct ProcessString {} 
 
 #[event]
 pub struct StringProcessed {

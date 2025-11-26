@@ -3,10 +3,10 @@ use crate::graph::{NodeId, GraphStore as Graph};
 #[derive(Debug, Clone)]
 pub enum Opcode {
     TraverseOut{
-        where_node_label: String,
-        where_edge_label: String,
-        where_not_node_label: String,
-        where_not_edge_label: String,
+        where_node_labels: Vec<String>,
+        where_edge_labels: Vec<String>,
+        where_not_node_labels: Vec<String>,
+        where_not_edge_labels: Vec<String>,
     },
     FilterNodeLabel{
         node_label: String,

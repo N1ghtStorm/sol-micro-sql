@@ -50,8 +50,27 @@ impl GraphStore {
         let mut visited = std::collections::HashSet::new();
         let mut queue = std::collections::VecDeque::new();
 
+        // Check and add start nodes if they match the node label filters
+        // (edge filters don't apply to start nodes since we don't traverse to them)
         for &node_id in start_nodes {
-            if self.get_node_by_id(node_id).is_some() {
+            if let Some(node) = self.get_node_by_id(node_id) {
+                // Check node label filters for start nodes
+                let node_matches = if !filter.where_node_labels.is_empty() {
+                    filter.where_node_labels.contains(&node.label)
+                } else {
+                    true
+                };
+                
+                let node_not_matches = if !filter.where_not_node_labels.is_empty() {
+                    filter.where_not_node_labels.contains(&node.label)
+                } else {
+                    false
+                };
+                
+                if node_matches && !node_not_matches {
+                    result.push(node_id);
+                }
+                
                 queue.push_back(node_id);
                 visited.insert(node_id);
             }
@@ -237,7 +256,8 @@ mod tests {
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1], &filter, None);
         
-        assert_eq!(result.len(), 2);
+        assert_eq!(result.len(), 3);
+        assert!(result.contains(&1)); // Start node is included
         assert!(result.contains(&2));
         assert!(result.contains(&3));
     }
@@ -259,7 +279,8 @@ mod tests {
         let filter = create_filter("City", "NONEXISTENT");
         let result = graph.traverse_out(&[1], &filter, None);
         
-        assert_eq!(result.len(), 0);
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&1)); // Start node is included even if no edges match
     }
 
     #[test]
@@ -279,7 +300,9 @@ mod tests {
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1, 2], &filter, None);
         
-        assert_eq!(result.len(), 1);
+        assert_eq!(result.len(), 3);
+        assert!(result.contains(&1)); // Start node 1 is included
+        assert!(result.contains(&2)); // Start node 2 is included
         assert!(result.contains(&3));
     }
 
@@ -290,8 +313,8 @@ mod tests {
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1], &filter, None);
         
-        assert_eq!(result.len(), 2);
-        assert!(!result.contains(&1));
+        assert_eq!(result.len(), 3);
+        assert!(result.contains(&1)); // Start node is included
         assert!(result.contains(&2));
         assert!(result.contains(&3));
     }
@@ -334,7 +357,8 @@ mod tests {
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1], &filter, None);
         
-        assert_eq!(result.len(), 2);
+        assert_eq!(result.len(), 3);
+        assert!(result.contains(&1)); // Start node is included
         assert!(result.contains(&2));
         assert!(result.contains(&3));
     }
@@ -538,15 +562,29 @@ mod tests {
     }
 
     #[test]
-    fn test_traverse_out_large_graph_simple() {
+    fn test_traverse_out_large_graph_simple_railway() {
         let graph = create_large_test_graph();
         
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1], &filter, None);
         
-        assert_eq!(result.len(), 1);
+        assert_eq!(result.len(), 4);
+        assert!(result.contains(&1)); // Start node is included
         assert!(result.contains(&2));
         assert!(result.contains(&3));
         assert!(result.contains(&4));
+    }
+
+    #[test]
+    fn test_traverse_out_large_graph_simple_highway() {
+        let graph = create_large_test_graph();
+        
+        let filter = create_filter("Town", "Highway");
+        let result = graph.traverse_out(&[11], &filter, None);
+        
+        assert_eq!(result.len(), 3); 
+        assert!(result.contains(&12));
+        assert!(result.contains(&13));
+        assert!(result.contains(&11));
     }
 }

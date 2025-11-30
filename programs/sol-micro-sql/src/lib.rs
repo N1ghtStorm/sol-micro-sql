@@ -1,6 +1,7 @@
 mod vm;
 mod graph;
 mod cypher;
+mod lexer;
 
 use anchor_lang::prelude::*;
 use crate::graph::GraphStore;

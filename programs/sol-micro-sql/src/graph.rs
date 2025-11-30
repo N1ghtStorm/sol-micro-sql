@@ -76,30 +76,34 @@ impl GraphStore {
             }
         }
 
-        while let Some(current_id) = queue.pop_front() {
-            if let Some(limit) = limit {
-                if result.len() >= limit {
-                    break;
+        // If edge filters are empty, we only filter start nodes, don't traverse
+        let should_traverse = !filter.where_edge_labels.is_empty() || !filter.where_not_edge_labels.is_empty();
+        
+        if should_traverse {
+            while let Some(current_id) = queue.pop_front() {
+                if let Some(limit) = limit {
+                    if result.len() >= limit {
+                        break;
+                    }
                 }
-            }
 
-            if let Some(current_node) = self.get_node_by_id(current_id) {
-                for &edge_index in &current_node.outgoing_edge_indices {
-                    if let Some(edge) = self.edges.get(edge_index as usize) {
-                        // Check edge label filters
-                        let edge_matches = if !filter.where_edge_labels.is_empty() {
-                            filter.where_edge_labels.contains(&edge.label)
-                        } else {
-                            true
-                        };
-                        
-                        let edge_not_matches = if !filter.where_not_edge_labels.is_empty() {
-                            filter.where_not_edge_labels.contains(&edge.label)
-                        } else {
-                            false
-                        };
-                        
-                        if edge_matches && !edge_not_matches {
+                if let Some(current_node) = self.get_node_by_id(current_id) {
+                    for &edge_index in &current_node.outgoing_edge_indices {
+                        if let Some(edge) = self.edges.get(edge_index as usize) {
+                            // Check edge label filters
+                            let edge_matches = if !filter.where_edge_labels.is_empty() {
+                                filter.where_edge_labels.contains(&edge.label)
+                            } else {
+                                true
+                            };
+                            
+                            let edge_not_matches = if !filter.where_not_edge_labels.is_empty() {
+                                filter.where_not_edge_labels.contains(&edge.label)
+                            } else {
+                                false
+                            };
+                            
+                            if edge_matches && !edge_not_matches {
                             let target_id = edge.to;
                             
                             if !visited.contains(&target_id) {
@@ -131,6 +135,7 @@ impl GraphStore {
                                         queue.push_back(target_id);
                                     }
                                 }
+                            }
                             }
                         }
                     }

@@ -2,6 +2,14 @@ use anchor_lang::prelude::*;
 
 pub type NodeId = u128;
 
+#[derive(Debug, Clone)]
+pub struct TraverseFilter {
+    pub where_node_labels: Vec<String>,
+    pub where_edge_labels: Vec<String>,
+    pub where_not_node_labels: Vec<String>,
+    pub where_not_edge_labels: Vec<String>,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct Node {
     pub id: NodeId,
@@ -35,8 +43,7 @@ impl GraphStore {
     pub fn traverse_out(
         &self,
         start_nodes: &[NodeId],
-        node_label: &str,
-        edge_label: &str,
+        filter: &TraverseFilter,
         limit: Option<usize>,
     ) -> Vec<NodeId> {
         let mut result = Vec::new();
@@ -60,14 +67,40 @@ impl GraphStore {
             if let Some(current_node) = self.get_node_by_id(current_id) {
                 for &edge_index in &current_node.outgoing_edge_indices {
                     if let Some(edge) = self.edges.get(edge_index as usize) {
-                        if edge.label == edge_label {
+                        // Check edge label filters
+                        let edge_matches = if !filter.where_edge_labels.is_empty() {
+                            filter.where_edge_labels.contains(&edge.label)
+                        } else {
+                            true
+                        };
+                        
+                        let edge_not_matches = if !filter.where_not_edge_labels.is_empty() {
+                            filter.where_not_edge_labels.contains(&edge.label)
+                        } else {
+                            false
+                        };
+                        
+                        if edge_matches && !edge_not_matches {
                             let target_id = edge.to;
                             
                             if !visited.contains(&target_id) {
                                 visited.insert(target_id);
                                 
                                 if let Some(target_node) = self.get_node_by_id(target_id) {
-                                    if target_node.label == node_label {
+                                    // Check node label filters
+                                    let node_matches = if !filter.where_node_labels.is_empty() {
+                                        filter.where_node_labels.contains(&target_node.label)
+                                    } else {
+                                        true
+                                    };
+                                    
+                                    let node_not_matches = if !filter.where_not_node_labels.is_empty() {
+                                        filter.where_not_node_labels.contains(&target_node.label)
+                                    } else {
+                                        false
+                                    };
+                                    
+                                    if node_matches && !node_not_matches {
                                         result.push(target_id);
                                         
                                         if let Some(limit) = limit {
@@ -94,6 +127,15 @@ impl GraphStore {
 mod tests {
     use super::*;
     use anchor_lang::prelude::Pubkey;
+
+    fn create_filter(node_label: &str, edge_label: &str) -> TraverseFilter {
+        TraverseFilter {
+            where_node_labels: vec![node_label.to_string()],
+            where_edge_labels: vec![edge_label.to_string()],
+            where_not_node_labels: Vec::new(),
+            where_not_edge_labels: Vec::new(),
+        }
+    }
 
     // Test graph schema:
     //
@@ -192,7 +234,8 @@ mod tests {
     fn test_traverse_out_simple() {
         let graph = create_small_test_graph();
         
-        let result = graph.traverse_out(&[1], "City", "Railway", None);
+        let filter = create_filter("City", "Railway");
+        let result = graph.traverse_out(&[1], &filter, None);
         
         assert_eq!(result.len(), 2);
         assert!(result.contains(&2));
@@ -203,7 +246,8 @@ mod tests {
     fn test_traverse_out_with_limit() {
         let graph = create_small_test_graph();
         
-        let result = graph.traverse_out(&[1], "City", "Railway", Some(1));
+        let filter = create_filter("City", "Railway");
+        let result = graph.traverse_out(&[1], &filter, Some(1));
         
         assert_eq!(result.len(), 1);
     }
@@ -212,7 +256,8 @@ mod tests {
     fn test_traverse_out_wrong_edge_label() {
         let graph = create_small_test_graph();
         
-        let result = graph.traverse_out(&[1], "City", "NONEXISTENT", None);
+        let filter = create_filter("City", "NONEXISTENT");
+        let result = graph.traverse_out(&[1], &filter, None);
         
         assert_eq!(result.len(), 0);
     }
@@ -221,7 +266,8 @@ mod tests {
     fn test_traverse_out_wrong_node_label() {
         let graph = create_small_test_graph();
         
-        let result = graph.traverse_out(&[1], "Town", "Railway", None);
+        let filter = create_filter("Town", "Railway");
+        let result = graph.traverse_out(&[1], &filter, None);
         
         assert_eq!(result.len(), 0);
     }
@@ -230,7 +276,8 @@ mod tests {
     fn test_traverse_out_multiple_start_nodes() {
         let graph = create_small_test_graph();
         
-        let result = graph.traverse_out(&[1, 2], "City", "Railway", None);
+        let filter = create_filter("City", "Railway");
+        let result = graph.traverse_out(&[1, 2], &filter, None);
         
         assert_eq!(result.len(), 1);
         assert!(result.contains(&3));
@@ -240,7 +287,8 @@ mod tests {
     fn test_traverse_out_handles_cycles() {
         let graph = create_small_test_graph();
         
-        let result = graph.traverse_out(&[1], "City", "Railway", None);
+        let filter = create_filter("City", "Railway");
+        let result = graph.traverse_out(&[1], &filter, None);
         
         assert_eq!(result.len(), 2);
         assert!(!result.contains(&1));
@@ -252,7 +300,8 @@ mod tests {
     fn test_traverse_out_different_edge_types() {
         let graph = create_small_test_graph();
         
-        let result = graph.traverse_out(&[2], "Town", "Highway", None);
+        let filter = create_filter("Town", "Highway");
+        let result = graph.traverse_out(&[2], &filter, None);
         
         assert_eq!(result.len(), 1);
         assert!(result.contains(&4));
@@ -262,7 +311,8 @@ mod tests {
     fn test_traverse_out_nonexistent_start_node() {
         let graph = create_small_test_graph();
         
-        let result = graph.traverse_out(&[999], "City", "Railway", None);
+        let filter = create_filter("City", "Railway");
+        let result = graph.traverse_out(&[999], &filter, None);
         
         assert_eq!(result.len(), 0);
     }
@@ -271,7 +321,8 @@ mod tests {
     fn test_traverse_out_empty_start_nodes() {
         let graph = create_small_test_graph();
         
-        let result = graph.traverse_out(&[], "City", "Railway", None);
+        let filter = create_filter("City", "Railway");
+        let result = graph.traverse_out(&[], &filter, None);
         
         assert_eq!(result.len(), 0);
     }
@@ -280,7 +331,8 @@ mod tests {
     fn test_traverse_out_multi_hop() {
         let graph = create_small_test_graph();
         
-        let result = graph.traverse_out(&[1], "City", "Railway", None);
+        let filter = create_filter("City", "Railway");
+        let result = graph.traverse_out(&[1], &filter, None);
         
         assert_eq!(result.len(), 2);
         assert!(result.contains(&2));
@@ -489,9 +541,10 @@ mod tests {
     fn test_traverse_out_large_graph_simple() {
         let graph = create_large_test_graph();
         
-        let result = graph.traverse_out(&[1], "City", "Railway", None);
+        let filter = create_filter("City", "Railway");
+        let result = graph.traverse_out(&[1], &filter, None);
         
-        assert_eq!(result.len(), 4);
+        assert_eq!(result.len(), 1);
         assert!(result.contains(&2));
         assert!(result.contains(&3));
         assert!(result.contains(&4));

@@ -1,13 +1,8 @@
-use crate::graph::{NodeId, GraphStore as Graph};
+use crate::graph::{NodeId, GraphStore as Graph, TraverseFilter};
 
 #[derive(Debug, Clone)]
 pub enum Opcode {
-    TraverseOut{
-        where_node_labels: Vec<String>,
-        where_edge_labels: Vec<String>,
-        where_not_node_labels: Vec<String>,
-        where_not_edge_labels: Vec<String>,
-    },
+    TraverseOut(TraverseFilter),
     FilterNodeLabel{
         node_label: String,
     },

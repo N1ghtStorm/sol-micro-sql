@@ -14,7 +14,7 @@ pub struct TraverseFilter {
 pub struct Node {
     pub id: NodeId,
     pub label: String,
-    pub attributes: Vec<(String, String)>,
+    pub data: Vec<u8>,
     pub outgoing_edge_indices: Vec<u32>,
 }
 
@@ -182,35 +182,35 @@ mod tests {
         nodes.push(Node {
             id: 1,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![0, 1],
         });
 
         nodes.push(Node {
             id: 2,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![2, 3],
         });
 
         nodes.push(Node {
             id: 3,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![4],
         });
 
         nodes.push(Node {
             id: 4,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![],
         });
 
         nodes.push(Node {
             id: 5,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![],
         });
 
@@ -396,91 +396,91 @@ mod tests {
         nodes.push(Node {
             id: 1,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![0, 1],
         });
 
         nodes.push(Node {
             id: 2,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![2, 3],
         });
 
         nodes.push(Node {
             id: 3,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![4],
         });
 
         nodes.push(Node {
             id: 4,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![],
         });
 
         nodes.push(Node {
             id: 5,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![],
         });
 
         nodes.push(Node {
             id: 6,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![],
         });
 
         nodes.push(Node {
             id: 7,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![5, 6],
         });
 
         nodes.push(Node {
             id: 8,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![7],
         });
 
         nodes.push(Node {
             id: 9,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![8],
         });
 
         nodes.push(Node {
             id: 10,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![],
         });
 
         nodes.push(Node {
             id: 11,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![9, 10],
         });
 
         nodes.push(Node {
             id: 12,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![11],
         });
 
         nodes.push(Node {
             id: 13,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![],
         });
 

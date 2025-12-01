@@ -7,7 +7,7 @@ pub enum Opcode {
     TraverseOut(TraverseFilter),
     SetLimit(usize),
     SaveResults,
-    CreateNode { label: String, attributes: Vec<(String, String)> },
+    CreateNode { label: String, data: Vec<u8> },
     CreateEdge { from: NodeId, to: NodeId, label: String },
 }
 
@@ -81,7 +81,7 @@ impl<'g> Vm<'g> {
                 Opcode::SaveResults => {
                     self.result_set.extend_from_slice(&self.current_set);
                 }
-                Opcode::CreateNode { label, attributes } => {
+                Opcode::CreateNode { label, data } => {
                     let id = self.graph.nonce;
                     self.graph.nonce = self.graph.nonce
                         .checked_add(1)
@@ -90,7 +90,7 @@ impl<'g> Vm<'g> {
                     let node = Node {
                         id,
                         label: label.clone(),
-                        attributes: attributes.clone(),
+                        data: data.clone(),
                         outgoing_edge_indices: Vec::new(),
                     };
 
@@ -160,35 +160,35 @@ mod tests {
         nodes.push(Node {
             id: 1,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![0, 1],
         });
 
         nodes.push(Node {
             id: 2,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![2, 3],
         });
 
         nodes.push(Node {
             id: 3,
             label: "City".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![4],
         });
 
         nodes.push(Node {
             id: 4,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![],
         });
 
         nodes.push(Node {
             id: 5,
             label: "Town".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: vec![],
         });
 
@@ -547,7 +547,7 @@ mod tests {
         
         let ops = vec![Opcode::CreateNode {
             label: "Village".to_string(),
-            attributes: vec![("population".to_string(), "1000".to_string())],
+            data: b"population=1000".to_vec(),
         }];
         let result = vm.execute(&ops).unwrap();
         
@@ -567,9 +567,7 @@ mod tests {
                 // Verify the node exists in the graph
                 let node = graph.get_node_by_id(new_node_id).unwrap();
                 assert_eq!(node.label, "Village");
-                assert_eq!(node.attributes.len(), 1);
-                assert_eq!(node.attributes[0].0, "population");
-                assert_eq!(node.attributes[0].1, "1000");
+                assert_eq!(node.data, b"population=1000");
             }
             _ => panic!("Expected Nodes result"),
         }
@@ -652,7 +650,7 @@ mod tests {
         // Create a new node
         let ops1 = vec![Opcode::CreateNode {
             label: "Village".to_string(),
-            attributes: Vec::new(),
+            data: Vec::new(),
         }];
         let result1 = vm.execute(&ops1).unwrap();
         

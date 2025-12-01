@@ -40,7 +40,7 @@ pub mod sol_micro_sql {
         let node = Node {
             id,
             label,
-            attributes: Vec::new(),
+            data: Vec::new(),
             outgoing_edge_indices: Vec::new(),
         };
 
@@ -72,11 +72,8 @@ pub mod sol_micro_sql {
             .find(|n| n.id == node_id)
             .ok_or(ErrorCode::NodeNotFound)?;
 
-        if let Some(existing) = node.attributes.iter_mut().find(|(k, _)| k == &key) {
-            existing.1 = value.clone();
-        } else {
-            node.attributes.push((key.clone(), value.clone()));
-        }
+        let new_data = format!("{}={}", key, value);
+        node.data = new_data.as_bytes().to_vec();
         
         msg!("Set attribute '{}' = '{}' for node {}", key, value, node_id);
         Ok(())

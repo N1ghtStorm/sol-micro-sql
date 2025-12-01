@@ -61,7 +61,7 @@ pub fn compile_to_opcodes(query: CypherQuery) -> Vec<Opcode> {
                 CreatePattern::Node { label, .. } => {
                     opcodes.push(Opcode::CreateNode {
                         label: label.unwrap_or_default(),
-                        attributes: Vec::new(),
+                        data: Vec::new(),
                     });
                 }
                 CreatePattern::Edge { from_id, to_id, edge, .. } => {

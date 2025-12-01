@@ -17,6 +17,7 @@ pub enum CreatePattern {
     Node {
         variable: String,
         label: Option<String>,
+        data: Option<Vec<u8>>,  // Node data in hex format
     },
     Edge {
         from: NodePattern,
@@ -146,7 +147,7 @@ fn tokenize(input: &str) -> Result<Vec<String>, ParseError> {
                     current.clear();
                 }
             }
-            '(' | ')' | '[' | ']' | '-' | '>' | '<' | ':' | '=' | ',' => {
+            '(' | ')' | '[' | ']' | '-' | '>' | '<' | ':' | '=' | ',' | '{' | '}' => {
                 if in_string {
                     current.push(ch);
                 } else {
@@ -205,11 +206,31 @@ fn parse_create_node_pattern(tokens: &mut Vec<String>) -> Result<CreatePattern, 
         None
     };
     
+    // Parse data in format { 0x.... }
+    let data = if peek_token(tokens) == "{" {
+        tokens.remove(0);
+        // Expect hex string starting with 0x
+        if peek_token(tokens).starts_with("0x") || peek_token(tokens).starts_with("0X") {
+            let hex_str = tokens.remove(0);
+            // Remove 0x prefix and parse hex
+            let hex_bytes = hex_str.trim_start_matches("0x").trim_start_matches("0X");
+            let parsed_data = parse_hex_string(hex_bytes)
+                .map_err(|e| ParseError::InvalidSyntax(format!("Invalid hex string: {}", e)))?;
+            expect_char(tokens, "}")?;
+            Some(parsed_data)
+        } else {
+            return Err(ParseError::InvalidSyntax("Expected hex string starting with 0x".to_string()));
+        }
+    } else {
+        None
+    };
+    
     expect_char(tokens, ")")?;
     
     Ok(CreatePattern::Node {
         variable,
         label,
+        data,
     })
 }
 
@@ -588,6 +609,26 @@ fn peek_token(tokens: &[String]) -> &str {
     }
 }
 
+fn parse_hex_string(hex: &str) -> Result<Vec<u8>, String> {
+    // Remove any whitespace
+    let hex = hex.trim();
+    
+    // Hex string must have even number of characters
+    if hex.len() % 2 != 0 {
+        return Err("Hex string must have even number of characters".to_string());
+    }
+    
+    let mut bytes = Vec::new();
+    for i in (0..hex.len()).step_by(2) {
+        let byte_str = &hex[i..i + 2];
+        let byte = u8::from_str_radix(byte_str, 16)
+            .map_err(|e| format!("Invalid hex character: {}", e))?;
+        bytes.push(byte);
+    }
+    
+    Ok(bytes)
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -742,9 +783,32 @@ mod tests {
         match query {
             CypherQuery::Create { create_pattern } => {
                 match create_pattern {
-                    CreatePattern::Node { variable, label } => {
+                    CreatePattern::Node { variable, label, data } => {
                         assert_eq!(variable, "n");
                         assert_eq!(label, Some("Person".to_string()));
+                        assert_eq!(data, None);
+                    }
+                    _ => panic!("Expected Node create pattern"),
+                }
+            }
+            _ => panic!("Expected Create query"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_node_with_hex_data() {
+        let query = "CREATE (n:Person {0x1234})";
+        let result = parse(query);
+        assert!(result.is_ok());
+        
+        let query = result.unwrap();
+        match query {
+            CypherQuery::Create { create_pattern } => {
+                match create_pattern {
+                    CreatePattern::Node { variable, label, data } => {
+                        assert_eq!(variable, "n");
+                        assert_eq!(label, Some("Person".to_string()));
+                        assert_eq!(data, Some(vec![0x12, 0x34]));
                     }
                     _ => panic!("Expected Node create pattern"),
                 }

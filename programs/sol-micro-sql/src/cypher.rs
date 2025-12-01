@@ -1,10 +1,30 @@
 
 #[derive(Debug, Clone)]
-pub struct CypherQuery {
-    pub match_pattern: MatchPattern,
-    pub where_clause: Option<WhereClause>,
-    pub return_clause: ReturnClause,
-    pub limit: Option<usize>,
+pub enum CypherQuery {
+    Match {
+        match_pattern: MatchPattern,
+        where_clause: Option<WhereClause>,
+        return_clause: ReturnClause,
+        limit: Option<usize>,
+    },
+    Create {
+        create_pattern: CreatePattern,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum CreatePattern {
+    Node {
+        variable: String,
+        label: Option<String>,
+    },
+    Edge {
+        from: NodePattern,
+        from_id: Option<u128>,  // Node ID if specified directly
+        edge: EdgePattern,
+        to: NodePattern,
+        to_id: Option<u128>,    // Node ID if specified directly
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -75,25 +95,40 @@ pub fn parse(query: &str) -> Result<CypherQuery, ParseError> {
     let query = query.trim();
     let mut tokens = tokenize(query)?;
     
-    let match_pattern = parse_match(&mut tokens)?;
-    let where_clause = parse_where(&mut tokens)?;
-    let return_clause = parse_return(&mut tokens)?;
-    let limit = parse_limit(&mut tokens)?;
-    
-    if limit.is_none() {
-        return Err(ParseError::MissingLimit);
+    if tokens.is_empty() {
+        return Err(ParseError::InvalidSyntax("Empty query".to_string()));
     }
     
-    if !tokens.is_empty() {
-        return Err(ParseError::InvalidSyntax(format!("Unexpected tokens: {:?}", tokens)));
+    let first_token = tokens[0].to_uppercase();
+    if first_token == "CREATE" {
+        let create_pattern = parse_create(&mut tokens)?;
+        if !tokens.is_empty() {
+            return Err(ParseError::InvalidSyntax(format!("Unexpected tokens: {:?}", tokens)));
+        }
+        Ok(CypherQuery::Create { create_pattern })
+    } else if first_token == "MATCH" {
+        let match_pattern = parse_match(&mut tokens)?;
+        let where_clause = parse_where(&mut tokens)?;
+        let return_clause = parse_return(&mut tokens)?;
+        let limit = parse_limit(&mut tokens)?;
+        
+        if limit.is_none() {
+            return Err(ParseError::MissingLimit);
+        }
+        
+        if !tokens.is_empty() {
+            return Err(ParseError::InvalidSyntax(format!("Unexpected tokens: {:?}", tokens)));
+        }
+        
+        Ok(CypherQuery::Match {
+            match_pattern,
+            where_clause,
+            return_clause,
+            limit,
+        })
+    } else {
+        Err(ParseError::InvalidSyntax(format!("Expected MATCH or CREATE, got '{}'", tokens[0])))
     }
-    
-    Ok(CypherQuery {
-        match_pattern,
-        where_clause,
-        return_clause,
-        limit,
-    })
 }
 
 fn tokenize(input: &str) -> Result<Vec<String>, ParseError> {
@@ -142,6 +177,176 @@ fn tokenize(input: &str) -> Result<Vec<String>, ParseError> {
     }
     
     Ok(tokens)
+}
+
+fn parse_create(tokens: &mut Vec<String>) -> Result<CreatePattern, ParseError> {
+    expect_keyword(tokens, "CREATE")?;
+    
+    if tokens.is_empty() {
+        return Err(ParseError::InvalidSyntax("Expected pattern after CREATE".to_string()));
+    }
+    
+    let has_arrow = tokens.iter().any(|t| t == "->" || t == "<-" || t == "-");
+    if has_arrow {
+        parse_create_edge_pattern(tokens)
+    } else {
+        parse_create_node_pattern(tokens)
+    }
+}
+
+fn parse_create_node_pattern(tokens: &mut Vec<String>) -> Result<CreatePattern, ParseError> {
+    expect_char(tokens, "(")?;
+    
+    let variable = expect_identifier(tokens)?;
+    let label = if peek_token(tokens) == ":" {
+        tokens.remove(0);
+        Some(expect_identifier(tokens)?)
+    } else {
+        None
+    };
+    
+    expect_char(tokens, ")")?;
+    
+    Ok(CreatePattern::Node {
+        variable,
+        label,
+    })
+}
+
+fn parse_create_edge_pattern(tokens: &mut Vec<String>) -> Result<CreatePattern, ParseError> {
+    expect_char(tokens, "(")?;
+    
+    // Support both identifier (variable) and numeric ID
+    let from_token = if tokens.is_empty() {
+        return Err(ParseError::UnexpectedToken("Expected node identifier or ID".to_string()));
+    } else {
+        tokens.remove(0)
+    };
+    
+    let (from_var, from_id, from_label) = if from_token.chars().next().map(|c| c.is_alphabetic() || c == '_').unwrap_or(false) {
+        // It's a variable identifier
+        let label = if peek_token(tokens) == ":" {
+            tokens.remove(0);
+            Some(expect_identifier(tokens)?)
+        } else {
+            None
+        };
+        expect_char(tokens, ")")?;
+        (Some(from_token), None, label)
+    } else if from_token.chars().all(|c| c.is_ascii_digit()) {
+        // It's a numeric ID
+        let from_id = from_token.parse::<u128>()
+            .map_err(|_| ParseError::InvalidSyntax(format!("Invalid node ID: {}", from_token)))?;
+        expect_char(tokens, ")")?;
+        (None, Some(from_id), None)
+    } else {
+        return Err(ParseError::InvalidSyntax(format!("Expected node identifier or ID, got '{}'", from_token)));
+    };
+    
+    // Parse edge pattern: -[:LABEL]-> or <-[:LABEL]- or -[:LABEL]-
+    expect_char(tokens, "-")?;
+    
+    // Check if next is [ (edge label) or >/< (direction)
+    let direction = if peek_token(tokens) == "[" {
+        // Edge label comes first, direction will be determined after ]
+        EdgeDirection::Bidirectional // Temporary, will be updated after parsing label
+    } else if peek_token(tokens) == ">" {
+        tokens.remove(0);
+        EdgeDirection::Outgoing
+    } else if peek_token(tokens) == "<" {
+        tokens.remove(0);
+        EdgeDirection::Incoming
+    } else {
+        EdgeDirection::Bidirectional
+    };
+    
+    // Parse edge label if present
+    let edge_label = if peek_token(tokens) == "[" {
+        tokens.remove(0);
+        let label = if peek_token(tokens) == ":" {
+            tokens.remove(0);
+            if peek_token(tokens) == "]" {
+                None
+            } else {
+                Some(expect_identifier(tokens)?)
+            }
+        } else {
+            None
+        };
+        expect_char(tokens, "]")?;
+        label
+    } else {
+        None
+    };
+    
+    // Determine final direction based on what comes after the label
+    let final_direction = if peek_token(tokens) == "-" {
+        tokens.remove(0);
+        if peek_token(tokens) == ">" {
+            tokens.remove(0);
+            EdgeDirection::Outgoing
+        } else if peek_token(tokens) == "<" {
+            tokens.remove(0);
+            EdgeDirection::Incoming
+        } else {
+            EdgeDirection::Bidirectional
+        }
+    } else if peek_token(tokens) == ">" {
+        tokens.remove(0);
+        EdgeDirection::Outgoing
+    } else if peek_token(tokens) == "<" {
+        tokens.remove(0);
+        EdgeDirection::Incoming
+    } else {
+        direction // Use the direction we determined earlier
+    };
+    
+    expect_char(tokens, "(")?;
+    
+    // Support both identifier (variable) and numeric ID for 'to' node
+    let to_token = if tokens.is_empty() {
+        return Err(ParseError::UnexpectedToken("Expected node identifier or ID".to_string()));
+    } else {
+        tokens.remove(0)
+    };
+    
+    let (to_var, to_id, to_label) = if to_token.chars().next().map(|c| c.is_alphabetic() || c == '_').unwrap_or(false) {
+        // It's a variable identifier
+        let label = if peek_token(tokens) == ":" {
+            tokens.remove(0);
+            Some(expect_identifier(tokens)?)
+        } else {
+            None
+        };
+        expect_char(tokens, ")")?;
+        (Some(to_token), None, label)
+    } else if to_token.chars().all(|c| c.is_ascii_digit()) {
+        // It's a numeric ID
+        let to_id = to_token.parse::<u128>()
+            .map_err(|_| ParseError::InvalidSyntax(format!("Invalid node ID: {}", to_token)))?;
+        expect_char(tokens, ")")?;
+        (None, Some(to_id), None)
+    } else {
+        return Err(ParseError::InvalidSyntax(format!("Expected node identifier or ID, got '{}'", to_token)));
+    };
+    
+    // Store node IDs in the pattern for CREATE edge
+    Ok(CreatePattern::Edge {
+        from: NodePattern {
+            variable: from_var.unwrap_or_default(),
+            label: from_label,
+        },
+        from_id: from_id,
+        edge: EdgePattern {
+            direction: final_direction,
+            label: edge_label,
+        },
+        to: NodePattern {
+            variable: to_var.unwrap_or_default(),
+            label: to_label,
+        },
+        to_id: to_id,
+    })
 }
 
 fn parse_match(tokens: &mut Vec<String>) -> Result<MatchPattern, ParseError> {
@@ -395,12 +600,17 @@ mod tests {
         assert!(result.is_ok());
         
         let query = result.unwrap();
-        match query.match_pattern {
-            MatchPattern::SingleNode { variable, label } => {
-                assert_eq!(variable, "n");
-                assert_eq!(label, Some("User".to_string()));
+        match query {
+            CypherQuery::Match { match_pattern, .. } => {
+                match match_pattern {
+                    MatchPattern::SingleNode { variable, label } => {
+                        assert_eq!(variable, "n");
+                        assert_eq!(label, Some("User".to_string()));
+                    }
+                    _ => panic!("Expected SingleNode pattern"),
+                }
             }
-            _ => panic!("Expected SingleNode pattern"),
+            _ => panic!("Expected Match query"),
         }
     }
 
@@ -412,12 +622,17 @@ mod tests {
         assert!(result.is_ok());
         
         let query = result.unwrap();
-        match query.match_pattern {
-            MatchPattern::SingleNode { variable, label } => {
-                assert_eq!(variable, "n");
-                assert_eq!(label, None);
+        match query {
+            CypherQuery::Match { match_pattern, .. } => {
+                match match_pattern {
+                    MatchPattern::SingleNode { variable, label } => {
+                        assert_eq!(variable, "n");
+                        assert_eq!(label, None);
+                    }
+                    _ => panic!("Expected SingleNode pattern"),
+                }
             }
-            _ => panic!("Expected SingleNode pattern"),
+            _ => panic!("Expected Match query"),
         }
     }
 
@@ -429,9 +644,14 @@ mod tests {
         assert!(result.is_ok());
         
         let query = result.unwrap();
-        match query.return_clause {
-            ReturnClause::All => {}
-            _ => panic!("Expected All return clause"),
+        match query {
+            CypherQuery::Match { return_clause, .. } => {
+                match return_clause {
+                    ReturnClause::All => {}
+                    _ => panic!("Expected All return clause"),
+                }
+            }
+            _ => panic!("Expected Match query"),
         }
     }
 
@@ -510,6 +730,75 @@ mod tests {
         let query = "MATCH (n:User) LIMIT 10";
         let result = parse(query);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_create_node() {
+        let query = "CREATE (n:Person)";
+        let result = parse(query);
+        assert!(result.is_ok());
+        
+        let query = result.unwrap();
+        match query {
+            CypherQuery::Create { create_pattern } => {
+                match create_pattern {
+                    CreatePattern::Node { variable, label } => {
+                        assert_eq!(variable, "n");
+                        assert_eq!(label, Some("Person".to_string()));
+                    }
+                    _ => panic!("Expected Node create pattern"),
+                }
+            }
+            _ => panic!("Expected Create query"),
+        }
+    }
+
+
+    #[test]
+    fn test_parse_create_edge_with_ids() {
+        let query = "CREATE (1)-[:FOLLOWS]->(2)";
+        let result = parse(query);
+        assert!(result.is_ok());
+        
+        let query = result.unwrap();
+        match query {
+            CypherQuery::Create { create_pattern } => {
+                match create_pattern {
+                    CreatePattern::Edge { from_id, to_id, edge, .. } => {
+                        assert_eq!(from_id, Some(1));
+                        assert_eq!(to_id, Some(2));
+                        assert_eq!(edge.label, Some("FOLLOWS".to_string()));
+                    }
+                    _ => panic!("Expected Edge create pattern"),
+                }
+            }
+            _ => panic!("Expected Create query"),
+        }
+    }
+
+    #[test]
+    fn test_parse_create_edge_with_variables() {
+        let query = "CREATE (a:User)-[:KNOWS]->(b:User)";
+        let result = parse(query);
+        assert!(result.is_ok());
+        
+        let query = result.unwrap();
+        match query {
+            CypherQuery::Create { create_pattern } => {
+                match create_pattern {
+                    CreatePattern::Edge { from_id, to_id, edge, from, to } => {
+                        // Variables are used, so IDs should be None
+                        assert_eq!(from_id, None);
+                        assert_eq!(to_id, None);
+                        assert_eq!(from.variable, "a");
+                        assert_eq!(to.variable, "b");
+                        assert_eq!(edge.label, Some("KNOWS".to_string()));
+                    }
+                    _ => panic!("Expected Edge create pattern"),
+                }
+            }
+            _ => panic!("Expected Create query"),
+        }
     }
 }
 

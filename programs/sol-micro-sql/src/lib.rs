@@ -4,6 +4,9 @@ mod lexer;
 mod vm;
 
 use crate::graph::GraphStore;
+use crate::vm::{Vm, VmResult};
+use crate::cypher::parse;
+use crate::lexer::compile_to_opcodes;
 use anchor_lang::prelude::*;
 
 declare_id!("9jJqjrdiJTYo9vYftpxJoLrLeuBn2qEQEX8Au1P8r1Gj");
@@ -26,6 +29,15 @@ pub mod sol_micro_sql {
             ctx.accounts.authority.key()
         );
         Ok(())
+    }
+
+    pub fn execute_query(ctx: Context<ExecuteQuery>, query: String) -> Result<VmResult> {
+        let graph = &mut ctx.accounts.graph_store;
+        let cypher_query = parse(&query).map_err(|_| ErrorCode::QueryExecutionFailed)?;
+        let ops = compile_to_opcodes(cypher_query);
+        let mut vm = Vm::new(graph);
+        let result = vm.execute(&ops).map_err(|_| ErrorCode::QueryExecutionFailed)?;
+        Ok(result)
     }
 
     pub fn get_node_info(ctx: Context<GetNodeInfo>, node_id: u128) -> Result<()> {
@@ -66,6 +78,16 @@ pub struct InitializeGraph<'info> {
 }
 
 #[derive(Accounts)]
+pub struct ExecuteQuery<'info> {
+    #[account(
+        mut,
+        seeds = [b"graph_store"],
+        bump
+    )]
+    pub graph_store: Account<'info, GraphStore>,
+}
+
+#[derive(Accounts)]
 pub struct GetNodeInfo<'info> {
     #[account(
         seeds = [b"graph_store"],
@@ -97,4 +119,6 @@ pub enum ErrorCode {
     DuplicateNodeId,
     #[msg("Overflow")]
     Overflow,
+    #[msg("Query execution failed")]
+    QueryExecutionFailed,
 }

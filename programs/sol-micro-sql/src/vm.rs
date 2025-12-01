@@ -1,4 +1,6 @@
 use crate::graph::{Edge, GraphStore as Graph, Node, NodeId, TraverseFilter};
+use anchor_lang::prelude::*;
+use std::result::Result as StdResult;
 
 #[derive(Debug, Clone)]
 pub enum Opcode {
@@ -18,7 +20,7 @@ pub enum Opcode {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
 pub enum VmResult {
     Nodes(Vec<NodeId>),
     Scalar(i64),
@@ -57,14 +59,14 @@ impl<'g> Vm<'g> {
         }
     }
 
-    fn get_current_nodes(&self) -> Result<&[NodeId], VmError> {
+    fn get_current_nodes(&self) -> StdResult<&[NodeId], VmError> {
         if self.current_set.is_empty() {
             return Err(VmError::InvalidNodeSet);
         }
         Ok(&self.current_set)
     }
 
-    pub fn execute(&mut self, ops: &[Opcode]) -> Result<VmResult, VmError> {
+    pub fn execute(&mut self, ops: &[Opcode]) -> StdResult<VmResult, VmError> {
         for op in ops {
             match op {
                 Opcode::SetCurrentFromAllNodes => {

@@ -65,7 +65,13 @@ pub struct InitializeGraph<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + 32 + 8 + 8 + 16 + 4 + (500 * 1024) + 4 + (200 * 1024),
+        space = 8 + // discriminator
+                32 + // authority: Pubkey
+                8 +  // node_count: u64
+                8 +  // edge_count: u64
+                16 + // nonce: NodeId (u128)
+                4 + (512) + // nodes: Vec<Node> (max ~512 bytes for initial capacity)
+                4 + (256),  // edges: Vec<Edge> (max ~256 bytes for initial capacity)
         seeds = [b"graph_store"],
         bump
     )]

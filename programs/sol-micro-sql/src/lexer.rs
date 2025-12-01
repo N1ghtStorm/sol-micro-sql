@@ -1,16 +1,21 @@
+use crate::cypher::{CreatePattern, CypherQuery, MatchPattern, WhereClause};
 use crate::graph::TraverseFilter;
 use crate::vm::Opcode;
-use crate::cypher::{CypherQuery, MatchPattern, WhereClause, CreatePattern};
 
 pub fn compile_to_opcodes(query: CypherQuery) -> Vec<Opcode> {
     let mut opcodes = Vec::new();
-    
+
     match query {
-        CypherQuery::Match { match_pattern, where_clause, limit, .. } => {
+        CypherQuery::Match {
+            match_pattern,
+            where_clause,
+            limit,
+            ..
+        } => {
             match match_pattern {
                 MatchPattern::SingleNode { variable: _, label } => {
                     opcodes.push(Opcode::SetCurrentFromAllNodes);
-                    
+
                     if let Some(label) = label {
                         let filter = TraverseFilter {
                             where_node_labels: vec![label],
@@ -26,7 +31,7 @@ pub fn compile_to_opcodes(query: CypherQuery) -> Vec<Opcode> {
                         opcodes.push(Opcode::SetCurrentFromIds(vec![start_id]));
                     } else {
                         opcodes.push(Opcode::SetCurrentFromAllNodes);
-                        
+
                         if let Some(label) = &from.label {
                             let filter = TraverseFilter {
                                 where_node_labels: vec![label.clone()],
@@ -37,7 +42,7 @@ pub fn compile_to_opcodes(query: CypherQuery) -> Vec<Opcode> {
                             opcodes.push(Opcode::TraverseOut(filter));
                         }
                     }
-                    
+
                     if let Some(edge_label) = edge.label {
                         let filter = TraverseFilter {
                             where_node_labels: to.label.map(|l| vec![l]).unwrap_or_default(),
@@ -49,11 +54,11 @@ pub fn compile_to_opcodes(query: CypherQuery) -> Vec<Opcode> {
                     }
                 }
             }
-            
+
             if let Some(limit) = limit {
                 opcodes.push(Opcode::SetLimit(limit));
             }
-            
+
             opcodes.push(Opcode::SaveResults);
         }
         CypherQuery::Create { create_pattern } => {
@@ -64,7 +69,12 @@ pub fn compile_to_opcodes(query: CypherQuery) -> Vec<Opcode> {
                         data: data.unwrap_or_default(),
                     });
                 }
-                CreatePattern::Edge { from_id, to_id, edge, .. } => {
+                CreatePattern::Edge {
+                    from_id,
+                    to_id,
+                    edge,
+                    ..
+                } => {
                     // For CREATE edge, use the node IDs if provided directly
                     // For MVP, we require explicit node IDs (numeric)
                     // Variable resolution can be added in the future
@@ -76,13 +86,11 @@ pub fn compile_to_opcodes(query: CypherQuery) -> Vec<Opcode> {
                             label: edge_label,
                         });
                     }
-                    // If node IDs are not provided, skip edge creation
-                    // In a full implementation, you'd resolve variables here
                 }
             }
         }
     }
-    
+
     opcodes
 }
 
@@ -97,7 +105,10 @@ fn extract_start_node_id(where_clause: &Option<WhereClause>) -> Option<u128> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cypher::{CypherQuery, MatchPattern, NodePattern, EdgePattern, EdgeDirection, WhereClause, ReturnClause};
+    use crate::cypher::{
+        CypherQuery, EdgeDirection, EdgePattern, MatchPattern, NodePattern, ReturnClause,
+        WhereClause,
+    };
 
     #[test]
     fn test_compile_relationship_query() {
@@ -120,10 +131,12 @@ mod tests {
                 variable: "n".to_string(),
                 value: 42,
             }),
-            return_clause: ReturnClause::NodeId { variable: "m".to_string() },
+            return_clause: ReturnClause::NodeId {
+                variable: "m".to_string(),
+            },
             limit: Some(10),
         };
-        
+
         let opcodes = compile_to_opcodes(query);
         assert!(opcodes.len() >= 3);
     }
@@ -149,13 +162,15 @@ mod tests {
                 variable: "n".to_string(),
                 value: 42,
             }),
-            return_clause: ReturnClause::NodeId { variable: "m".to_string() },
+            return_clause: ReturnClause::NodeId {
+                variable: "m".to_string(),
+            },
             limit: Some(10),
         };
-        
+
         let opcodes = compile_to_opcodes(query);
         assert!(opcodes.len() >= 3);
-        
+
         match &opcodes[0] {
             Opcode::SetCurrentFromIds(ids) => {
                 assert_eq!(ids, &vec![42]);
@@ -164,4 +179,3 @@ mod tests {
         }
     }
 }
-

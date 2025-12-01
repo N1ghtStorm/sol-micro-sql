@@ -60,25 +60,26 @@ impl GraphStore {
                 } else {
                     true
                 };
-                
+
                 let node_not_matches = if !filter.where_not_node_labels.is_empty() {
                     filter.where_not_node_labels.contains(&node.label)
                 } else {
                     false
                 };
-                
+
                 if node_matches && !node_not_matches {
                     result.push(node_id);
                 }
-                
+
                 queue.push_back(node_id);
                 visited.insert(node_id);
             }
         }
 
         // If edge filters are empty, we only filter start nodes, don't traverse
-        let should_traverse = !filter.where_edge_labels.is_empty() || !filter.where_not_edge_labels.is_empty();
-        
+        let should_traverse =
+            !filter.where_edge_labels.is_empty() || !filter.where_not_edge_labels.is_empty();
+
         if should_traverse {
             while let Some(current_id) = queue.pop_front() {
                 if let Some(limit) = limit {
@@ -96,46 +97,49 @@ impl GraphStore {
                             } else {
                                 true
                             };
-                            
+
                             let edge_not_matches = if !filter.where_not_edge_labels.is_empty() {
                                 filter.where_not_edge_labels.contains(&edge.label)
                             } else {
                                 false
                             };
-                            
+
                             if edge_matches && !edge_not_matches {
-                            let target_id = edge.to;
-                            
-                            if !visited.contains(&target_id) {
-                                visited.insert(target_id);
-                                
-                                if let Some(target_node) = self.get_node_by_id(target_id) {
-                                    // Check node label filters
-                                    let node_matches = if !filter.where_node_labels.is_empty() {
-                                        filter.where_node_labels.contains(&target_node.label)
-                                    } else {
-                                        true
-                                    };
-                                    
-                                    let node_not_matches = if !filter.where_not_node_labels.is_empty() {
-                                        filter.where_not_node_labels.contains(&target_node.label)
-                                    } else {
-                                        false
-                                    };
-                                    
-                                    if node_matches && !node_not_matches {
-                                        result.push(target_id);
-                                        
-                                        if let Some(limit) = limit {
-                                            if result.len() >= limit {
-                                                return result;
+                                let target_id = edge.to;
+
+                                if !visited.contains(&target_id) {
+                                    visited.insert(target_id);
+
+                                    if let Some(target_node) = self.get_node_by_id(target_id) {
+                                        // Check node label filters
+                                        let node_matches = if !filter.where_node_labels.is_empty() {
+                                            filter.where_node_labels.contains(&target_node.label)
+                                        } else {
+                                            true
+                                        };
+
+                                        let node_not_matches =
+                                            if !filter.where_not_node_labels.is_empty() {
+                                                filter
+                                                    .where_not_node_labels
+                                                    .contains(&target_node.label)
+                                            } else {
+                                                false
+                                            };
+
+                                        if node_matches && !node_not_matches {
+                                            result.push(target_id);
+
+                                            if let Some(limit) = limit {
+                                                if result.len() >= limit {
+                                                    return result;
+                                                }
                                             }
+
+                                            queue.push_back(target_id);
                                         }
-                                        
-                                        queue.push_back(target_id);
                                     }
                                 }
-                            }
                             }
                         }
                     }
@@ -175,7 +179,7 @@ mod tests {
     //
     fn create_small_test_graph() -> GraphStore {
         let authority = Pubkey::new_unique();
-        
+
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
 
@@ -257,10 +261,10 @@ mod tests {
     #[test]
     fn test_traverse_out_simple() {
         let graph = create_small_test_graph();
-        
+
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1], &filter, None);
-        
+
         assert_eq!(result.len(), 3);
         assert!(result.contains(&1)); // Start node is included
         assert!(result.contains(&2));
@@ -270,20 +274,20 @@ mod tests {
     #[test]
     fn test_traverse_out_with_limit() {
         let graph = create_small_test_graph();
-        
+
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1], &filter, Some(1));
-        
+
         assert_eq!(result.len(), 1);
     }
 
     #[test]
     fn test_traverse_out_wrong_edge_label() {
         let graph = create_small_test_graph();
-        
+
         let filter = create_filter("City", "NONEXISTENT");
         let result = graph.traverse_out(&[1], &filter, None);
-        
+
         assert_eq!(result.len(), 1);
         assert!(result.contains(&1)); // Start node is included even if no edges match
     }
@@ -291,20 +295,20 @@ mod tests {
     #[test]
     fn test_traverse_out_wrong_node_label() {
         let graph = create_small_test_graph();
-        
+
         let filter = create_filter("Town", "Railway");
         let result = graph.traverse_out(&[1], &filter, None);
-        
+
         assert_eq!(result.len(), 0);
     }
 
     #[test]
     fn test_traverse_out_multiple_start_nodes() {
         let graph = create_small_test_graph();
-        
+
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1, 2], &filter, None);
-        
+
         assert_eq!(result.len(), 3);
         assert!(result.contains(&1)); // Start node 1 is included
         assert!(result.contains(&2)); // Start node 2 is included
@@ -314,10 +318,10 @@ mod tests {
     #[test]
     fn test_traverse_out_handles_cycles() {
         let graph = create_small_test_graph();
-        
+
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1], &filter, None);
-        
+
         assert_eq!(result.len(), 3);
         assert!(result.contains(&1)); // Start node is included
         assert!(result.contains(&2));
@@ -327,10 +331,10 @@ mod tests {
     #[test]
     fn test_traverse_out_different_edge_types() {
         let graph = create_small_test_graph();
-        
+
         let filter = create_filter("Town", "Highway");
         let result = graph.traverse_out(&[2], &filter, None);
-        
+
         assert_eq!(result.len(), 1);
         assert!(result.contains(&4));
     }
@@ -338,37 +342,36 @@ mod tests {
     #[test]
     fn test_traverse_out_nonexistent_start_node() {
         let graph = create_small_test_graph();
-        
+
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[999], &filter, None);
-        
+
         assert_eq!(result.len(), 0);
     }
 
     #[test]
     fn test_traverse_out_empty_start_nodes() {
         let graph = create_small_test_graph();
-        
+
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[], &filter, None);
-        
+
         assert_eq!(result.len(), 0);
     }
 
     #[test]
     fn test_traverse_out_multi_hop() {
         let graph = create_small_test_graph();
-        
+
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1], &filter, None);
-        
+
         assert_eq!(result.len(), 3);
         assert!(result.contains(&1)); // Start node is included
         assert!(result.contains(&2));
         assert!(result.contains(&3));
     }
 
-    
     // Large test graph schema:
     //
     //     City(1) ──Railway──> City(2) ──Railway──> City(3) ──Railway──> City(4)
@@ -389,7 +392,7 @@ mod tests {
     //
     fn create_large_test_graph() -> GraphStore {
         let authority = Pubkey::new_unique();
-        
+
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
 
@@ -569,10 +572,10 @@ mod tests {
     #[test]
     fn test_traverse_out_large_graph_simple_railway() {
         let graph = create_large_test_graph();
-        
+
         let filter = create_filter("City", "Railway");
         let result = graph.traverse_out(&[1], &filter, None);
-        
+
         assert_eq!(result.len(), 4);
         assert!(result.contains(&1)); // Start node is included
         assert!(result.contains(&2));
@@ -583,11 +586,11 @@ mod tests {
     #[test]
     fn test_traverse_out_large_graph_simple_highway() {
         let graph = create_large_test_graph();
-        
+
         let filter = create_filter("Town", "Highway");
         let result = graph.traverse_out(&[11], &filter, None);
-        
-        assert_eq!(result.len(), 3); 
+
+        assert_eq!(result.len(), 3);
         assert!(result.contains(&12));
         assert!(result.contains(&13));
         assert!(result.contains(&11));

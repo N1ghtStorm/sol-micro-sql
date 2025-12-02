@@ -3,10 +3,10 @@ mod graph;
 mod lexer;
 mod vm;
 
+use crate::cypher::{parse, CypherQuery};
 use crate::graph::GraphStore;
-use crate::vm::{Vm, VmResult};
-use crate::cypher::parse;
 use crate::lexer::compile_to_opcodes;
+use crate::vm::{Vm, VmError, VmResult};
 use anchor_lang::prelude::*;
 
 declare_id!("9jJqjrdiJTYo9vYftpxJoLrLeuBn2qEQEX8Au1P8r1Gj");
@@ -32,11 +32,33 @@ pub mod sol_micro_sql {
     }
 
     pub fn execute_query(ctx: Context<ExecuteQuery>, query: String) -> Result<VmResult> {
-        let graph = &mut ctx.accounts.graph_store;
+        let graph = &ctx.accounts.graph_store;
         let cypher_query = parse(&query).map_err(|_| ErrorCode::QueryExecutionFailed)?;
+
+        let has_create = matches!(cypher_query, CypherQuery::Create { .. });
+
+        if has_create {
+            require!(
+                ctx.accounts.authority.key() == graph.authority,
+                ErrorCode::Unauthorized
+            );
+        }
+
+        let graph = &mut ctx.accounts.graph_store;
         let ops = compile_to_opcodes(cypher_query);
+
+        require!(query.len() <= 4096, ErrorCode::QueryExecutionFailed);
+        require!(ops.len() <= 100, ErrorCode::QueryExecutionFailed);
+
         let mut vm = Vm::new(graph);
-        let result = vm.execute(&ops).map_err(|_| ErrorCode::QueryExecutionFailed)?;
+        let result = vm.execute(&ops).map_err(|e| match e {
+            VmError::NodeNotFound => ErrorCode::NodeNotFound,
+            VmError::Overflow => ErrorCode::Overflow,
+            VmError::DataTooLarge | VmError::LabelTooLong | VmError::GraphLimitExceeded => {
+                ErrorCode::QueryExecutionFailed
+            }
+            _ => ErrorCode::QueryExecutionFailed,
+        })?;
         Ok(result)
     }
 
@@ -65,13 +87,13 @@ pub struct InitializeGraph<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + // discriminator
-                32 + // authority: Pubkey
-                8 +  // node_count: u64
-                8 +  // edge_count: u64
-                16 + // nonce: NodeId (u128)
-                4 + (512) + // nodes: Vec<Node> (max ~512 bytes for initial capacity)
-                4 + (256),  // edges: Vec<Edge> (max ~256 bytes for initial capacity)
+        space = 8 +
+                32 +
+                8 +
+                8 +
+                16 +
+                4 + (512) +
+                4 + (256),
         seeds = [b"graph_store"],
         bump
     )]
@@ -91,6 +113,9 @@ pub struct ExecuteQuery<'info> {
         bump
     )]
     pub graph_store: Account<'info, GraphStore>,
+
+    /// CHECK: Authority is only required for CREATE operations, checked in the function
+    pub authority: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -127,4 +152,10 @@ pub enum ErrorCode {
     Overflow,
     #[msg("Query execution failed")]
     QueryExecutionFailed,
+    #[msg("Data too large")]
+    DataTooLarge,
+    #[msg("Label too long")]
+    LabelTooLong,
+    #[msg("Graph limit exceeded")]
+    GraphLimitExceeded,
 }

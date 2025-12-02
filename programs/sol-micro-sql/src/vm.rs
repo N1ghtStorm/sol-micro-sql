@@ -47,6 +47,9 @@ pub enum VmError {
     InvalidNodeSet,
     NodeNotFound,
     Overflow,
+    DataTooLarge,
+    LabelTooLong,
+    GraphLimitExceeded,
 }
 
 impl<'g> Vm<'g> {
@@ -87,6 +90,20 @@ impl<'g> Vm<'g> {
                     self.result_set.extend_from_slice(&self.current_set);
                 }
                 Opcode::CreateNode { label, data } => {
+                    // Security checks: limit data and label sizes
+                    if data.len() > 1024 {
+                        return Err(VmError::DataTooLarge);
+                    }
+                    if label.len() > 64 {
+                        return Err(VmError::LabelTooLong);
+                    }
+
+                    // Limit total number of nodes to prevent DoS
+                    const MAX_NODES: usize = 1000;
+                    if self.graph.nodes.len() >= MAX_NODES {
+                        return Err(VmError::GraphLimitExceeded);
+                    }
+
                     let id = self.graph.nonce;
                     self.graph.nonce = self.graph.nonce.checked_add(1).ok_or(VmError::Overflow)?;
 
@@ -108,6 +125,17 @@ impl<'g> Vm<'g> {
                     self.current_set = vec![id];
                 }
                 Opcode::CreateEdge { from, to, label } => {
+                    // Security checks: limit label size
+                    if label.len() > 64 {
+                        return Err(VmError::LabelTooLong);
+                    }
+
+                    // Limit total number of edges to prevent DoS
+                    const MAX_EDGES: usize = 5000;
+                    if self.graph.edges.len() >= MAX_EDGES {
+                        return Err(VmError::GraphLimitExceeded);
+                    }
+
                     let from_exists = self.graph.nodes.iter().any(|n| n.id == *from);
                     let to_exists = self.graph.nodes.iter().any(|n| n.id == *to);
 
